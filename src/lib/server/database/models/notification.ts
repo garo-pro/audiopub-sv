@@ -235,6 +235,10 @@ export default class Notification extends Model {
 
             title = `${resolvedNotification.actor?.displayName} commented on ${comment.audio?.title}`;
             message = comment.content;
+        } else if (resolvedNotification.type == NotificationType.mention && resolvedNotification.target) {
+            const comment = resolvedNotification.target as ClientsideComment;
+            title = `${resolvedNotification.actor?.displayName} mentioned you on ${comment.audio?.title}`;
+            message = comment.content;
         } else if (resolvedNotification.type == NotificationType.favorite && resolvedNotification.target) {
             const audio = resolvedNotification.target as ClientsideAudio;
 
