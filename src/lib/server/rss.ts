@@ -92,25 +92,41 @@ async function findEnclosure(audio: Audio): Promise<Enclosure | null> {
     return null;
 }
 
-async function renderItem(audio: Audio, author: string): Promise<string> {
-    const link = `${baseUrl}/listen/${audio.id}`;
+/*
+ * Readers treat <description> as HTML, so the line breaks people type would
+ * collapse into one paragraph. Turn them into <br> tags, escaped like the
+ * rest of the text.
+ */
+function descriptionHtml(text: string): string {
+    return escapeXml(text).replace(/\r?\n/g, "&lt;br /&gt;");
+}
+
+/**
+ * Renders one upload, or nothing if its file is not on disk yet (an upload
+ * still being written). Leaving it out beats listing it without audio: many
+ * podcast apps remember an episode by its guid and never look again for an
+ * enclosure that shows up later.
+ */
+async function renderItem(audio: Audio, author: string): Promise<string | null> {
     const enclosure = await findEnclosure(audio);
-    const lines = [
+    if (!enclosure) {
+        return null;
+    }
+    const link = `${baseUrl}/listen/${audio.id}`;
+    return [
         "    <item>",
         `      <title>${escapeXml(audio.title)}</title>`,
         `      <link>${escapeXml(link)}</link>`,
-        `      <guid isPermaLink="true">${escapeXml(link)}</guid>`,
+        // Not the link: a guid built from the base URL would change if the
+        // instance ever moved, and every subscriber would get the whole feed
+        // again as new episodes.
+        `      <guid isPermaLink="false">audiopub:${audio.id}</guid>`,
         `      <pubDate>${audio.createdAt.toUTCString()}</pubDate>`,
-        `      <description>${escapeXml(audio.description)}</description>`,
+        `      <description>${descriptionHtml(audio.description || audio.title)}</description>`,
         `      <itunes:author>${escapeXml(author)}</itunes:author>`,
-    ];
-    if (enclosure) {
-        lines.push(
-            `      <enclosure url="${escapeXml(enclosure.url)}" length="${enclosure.length}" type="${escapeXml(enclosure.type)}" />`,
-        );
-    }
-    lines.push("    </item>");
-    return lines.join("\n");
+        `      <enclosure url="${escapeXml(enclosure.url)}" length="${enclosure.length}" type="${escapeXml(enclosure.type)}" />`,
+        "    </item>",
+    ].join("\n");
 }
 
 /**
@@ -122,7 +138,9 @@ export async function renderUserFeed(user: User, audios: Audio[]): Promise<strin
     const profileUrl = `${baseUrl}/user/@${encodeURIComponent(user.name)}`;
     const feedUrl = `${profileUrl}/feed.xml`;
     const description = user.bio.trim() || `Audio shared by ${author} on Audiopub.`;
-    const items = await Promise.all(audios.map((audio) => renderItem(audio, author)));
+    const items = (
+        await Promise.all(audios.map((audio) => renderItem(audio, author)))
+    ).filter((item): item is string => item !== null);
     const lastBuildDate = audios.length
         ? audios[0].createdAt.toUTCString()
         : new Date().toUTCString();

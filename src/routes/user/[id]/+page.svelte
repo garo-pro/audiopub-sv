@@ -52,6 +52,19 @@
                 });
         }
     }
+
+    // A browser downloads the feed instead of showing it, so rather than link
+    // to it, hand over the address to paste into a podcast app.
+    function onCopyFeedClick() {
+        navigator.clipboard
+            .writeText(`${window.location.origin}${feedUrl}`)
+            .then(() => {
+                alert("RSS feed link copied to clipboard");
+            })
+            .catch((err) => {
+                console.error("Could not copy text: ", err);
+            });
+    }
 </script>
 
 <svelte:head>
@@ -68,7 +81,7 @@
 <h1>{data.profileUser.displayName}'s Profile</h1>
 <button on:click={onShareClick}>Share profile</button>
 {#if hasFeed}
-    <a href={feedUrl}>RSS feed</a>
+    <button on:click={onCopyFeedClick}>Copy RSS feed link</button>
 {/if}
 
 <table>

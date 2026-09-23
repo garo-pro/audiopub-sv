@@ -26,9 +26,11 @@ export const GET: RequestHandler = async (event) => {
     const user = await findUserByProfileParam(event.params.id);
 
     /*
-     * Feed readers fetch anonymously, so the feed shows exactly what a
-     * logged-out visitor may see: nothing from banned accounts, and nothing
-     * from accounts still waiting to be trusted.
+     * Feed readers fetch anonymously, and a feed gets copied into apps we
+     * cannot take it back from, so this is deliberately stricter than the
+     * profile page: nothing from accounts still waiting to be trusted, and
+     * nothing from banned accounts, even though the profile page still shows
+     * a banned user's old uploads.
      */
     if (!user || user.isBanned || !user.isTrusted) {
         return error(404, "Not found");
