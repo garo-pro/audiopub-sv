@@ -28,6 +28,10 @@
     export let data;
     onMount(() => title.set(`${data.profileUser.displayName}'s Profile`));
 
+    // The feed only exists for accounts a logged-out visitor could see.
+    $: hasFeed = data.profileUser.isTrusted && !data.profileUser.isBanned;
+    $: feedUrl = `/user/@${encodeURIComponent(data.profileUser.name)}/feed.xml`;
+
     function onShareClick() {
         const url = `${window.location.origin}/user/@${encodeURIComponent(data.profileUser.name)}`;
         if (navigator.share) {
@@ -50,8 +54,22 @@
     }
 </script>
 
+<svelte:head>
+    {#if hasFeed}
+        <link
+            rel="alternate"
+            type="application/rss+xml"
+            title={`${data.profileUser.displayName} on Audiopub`}
+            href={feedUrl}
+        />
+    {/if}
+</svelte:head>
+
 <h1>{data.profileUser.displayName}'s Profile</h1>
 <button on:click={onShareClick}>Share profile</button>
+{#if hasFeed}
+    <a href={feedUrl}>RSS feed</a>
+{/if}
 
 <table>
     <tbody>
