@@ -70,6 +70,25 @@ async function mentionRecipients(
         );
     }
 
+    // Anyone can mention anyone, so keep it to one unread mention per author:
+    // until the last one is read, more from the same person add nothing.
+    if (recipients.length > 0) {
+        const alreadyPinged = new Set(
+            (
+                await Notification.findAll({
+                    where: {
+                        type: NotificationType.mention,
+                        actorId: actor.id,
+                        readAt: null,
+                        userId: { [Op.in]: recipients.map((user) => user.id) },
+                    },
+                    attributes: ["userId"],
+                })
+            ).map((notification) => notification.userId),
+        );
+        recipients = recipients.filter((user) => !alreadyPinged.has(user.id));
+    }
+
     return recipients.slice(0, MAX_MENTIONS_PER_COMMENT);
 }
 
@@ -77,8 +96,23 @@ async function mentionRecipients(
  * Notifies everyone who should hear about a new comment: the people it
  * @mentions get a mention, and the audio's uploader and followers get the
  * usual comment notification, unless they were already mentioned.
+ *
+ * Never throws: the comment is already saved by the time this runs, and
+ * failing the request would only make the author post it again.
  */
 export async function notifyAboutComment(
+    comment: Comment,
+    audio: Audio,
+    actor: User,
+): Promise<void> {
+    try {
+        await sendCommentNotifications(comment, audio, actor);
+    } catch (err) {
+        console.error("Error sending comment notifications:", err);
+    }
+}
+
+async function sendCommentNotifications(
     comment: Comment,
     audio: Audio,
     actor: User,

@@ -26,7 +26,11 @@
  * checks the length), so a mention is "@" followed by a run of non-whitespace.
  * Punctuation after a name ("thanks @garo!") is part of that run, so each
  * mention yields two candidates: the run as typed, and the run with trailing
- * punctuation removed. Whichever names an account wins, the full run first.
+ * punctuation removed, plus one without a possessive "'s". Whichever names an
+ * account wins, the full run first.
+ *
+ * Two kinds of name cannot be mentioned: ones with a space, and ones with an
+ * "@" in them ("@a@b" is read as a mention of "a").
  */
 
 /** The most people a single comment can notify, so it cannot be used to spam. */
@@ -39,15 +43,18 @@ const MAX_NAME_LENGTH = 24;
  * The "@" has to start the text or follow whitespace or an opening bracket or
  * quote. That keeps email addresses (me@example.com) from reading as mentions.
  */
-const MENTION_PATTERN = /(^|[\s(\[{"'])@([^\s@]+)/g;
-const TRAILING_PUNCTUATION = /[.,!?;:)\]}"'…]+$/;
+const MENTION_PATTERN = /(^|[\s(\[{"'*_~\u201C\u2018])@([^\s@]+)/g;
+const TRAILING_PUNCTUATION = /[.,!?;:)\]}"'*_~\u201D\u2019\u2026]+$/;
+const POSSESSIVE = /['\u2019]s$/i;
 
 export type MentionSegment =
     | { kind: "text"; text: string }
     | { kind: "mention"; text: string; name: string };
 
-function isPlausibleName(name: string): boolean {
-    return name.length >= MIN_NAME_LENGTH && name.length <= MAX_NAME_LENGTH;
+// Registration checks the length of the name as typed, so this does too;
+// lowercasing can change it.
+function isPlausibleName(typed: string): boolean {
+    return typed.length >= MIN_NAME_LENGTH && typed.length <= MAX_NAME_LENGTH;
 }
 
 /**
@@ -60,9 +67,15 @@ function namesFor(run: string): { typed: string; name: string }[] {
     if (trimmed && trimmed !== run) {
         typedForms.push(trimmed);
     }
+    // "@garo's upload": each form is a prefix of the one before, which
+    // splitMentions relies on.
+    const unpossessive = trimmed.replace(POSSESSIVE, "");
+    if (unpossessive && unpossessive !== trimmed) {
+        typedForms.push(unpossessive);
+    }
     return typedForms
-        .map((typed) => ({ typed, name: typed.toLowerCase() }))
-        .filter(({ name }) => isPlausibleName(name));
+        .filter(isPlausibleName)
+        .map((typed) => ({ typed, name: typed.toLowerCase() }));
 }
 
 /**
